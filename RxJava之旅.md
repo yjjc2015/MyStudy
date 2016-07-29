@@ -1,0 +1,354 @@
+## 一.参考：
+http://gank.io/post/560e15be2dca930e00da1083
+## 二.导入依赖
+##### 1.导入rxJava依赖
+```
+compile 'io.reactivex:rxjava:1.1.8'
+```
+##### 2.导入rxAndroid依赖
+
+```
+compile 'io.reactivex:rxandroid:1.2.1'
+```
+##### 3.配合retrofit一起使用
+
+```
+compile 'com.squareup.retrofit2:retrofit:2.1.0'
+compile 'com.squareup.retrofit2:converter-gson:2.1.0'
+compile 'com.squareup.retrofit2:adapter-rxjava:2.1.0'//导入retrofit支持的rxJava后，就不需要导入io.reactivex:rxjava
+```
+## 三.基础用法：
+1. 直接通过Onservable.create和new Subscriber<T>创建被观察者和观察者
+```
+//1.创建被观察者，它调用观察者的onNext方法
+Observable<String> myObservable = Observable.create(new Observable.OnSubscribe<String>(){
+    @Override
+    public void call(Subscriber<? super String> subscriber) {
+        subscriber.onNext("Hello every day is a good opportunity!");
+    }
+});
+//2.创建观察者，在onNext方法中显示被观察者返回的字符串
+ Subscriber<String> mySubscriber = new Subscriber<String>() {
+    @Override
+    public void onCompleted() {
+    }
+    @Override
+    public void onError(Throwable e) {
+    }
+    @Override
+    public void onNext(String s) {
+        System.out.print(s);
+        mBinding.text.setText(s);
+    }
+};
+//3.观察者mySubscriber订阅被观察者myObservable，被观察者向观察者传递数据，观察者最终将数据展示在ui界面上
+myObservable.subscribe(mySubscriber);
+```
+2. 通过just和Action1简化创建过程（创建被观察者和观察者）
+
+```
+//1.创建被观察者，并向观察者传递的数据
+Observable<String> myObservable = Observable.just("Hello world");
+//2.通过Action1，创建观察者，得到被观察者的数据并显示
+Action1<String> onNextAction = new Action1<String>() {
+    @Override
+    public void call(String s) {
+        mBinding.text.setText(s);
+    }
+};
+//3.观察者订阅被观察者，开始启动整个事件
+myObservable.subscribe(onNextAction);
+```
+3. 通过map操作符，对被观察者传递给观察者的数据进行加工
+
+```
+            //被观察者传递的初始数据
+ Observable.just("My name is Hoping!")
+  {         //加工处理数据，并传递给观察者
+            .map(new Func1<String, String>()
+                @Override
+                public String call(String s) {
+                    return s + "Your name is TangHaoDong";
+                }
+            })
+            //观察者订阅被观察者，得到数据并显示
+            .subscribe(new Action1<String>() {
+                @Override
+                public void call(String s) {
+                    mBinding.text.setText(s);
+                }
+            });
+```
+4. 通过map，还可以对数据进行转换
+
+```
+Observable.just("123456789")
+        .map(new Func1<String, Integer>() {
+            @Override
+            public Integer call(String s) {
+                return Integer.parseInt(s) + 1;
+            }
+        })
+        .map(new Func1<Integer, String>() {
+            @Override
+            public String call(Integer integer) {
+                return Integer.toString(integer);
+            }
+        })
+        .subscribe(new Action1<String>() {
+            @Override
+            public void call(String s) {
+                mBinding.text.setText(s);
+            }
+        });
+```
+
+5. 通过from解决循环输出问题
+
+```
+//List<String> list = new ArrayList<>();
+//        Observable.from(list)
+Observable.from(new String[]{"yjjc1", "yjjc2", "yjjc3"})
+        .subscribe(new Action1<String>() {
+            @Override
+            public void call(String s) {
+                Toast.makeText(RxActivity.this, s, Toast.LENGTH_SHORT).show();
+            }
+        });
+```
+6. 观察者捕获异常
+
+```
+Observable.just("hello my codes!")
+            .map(new Func1<String, String>() {
+                @Override
+                public String call(String s) {
+                    int i = 5 / 0;
+                    return s + i;
+                }
+            })
+            .map(new Func1<String, String>() {
+                @Override
+                public String call(String s) {
+                    return s;
+                }
+            })
+            .subscribe(new Action1<String>() {
+                @Override
+                public void call(String s) {
+                    mTitle.set(s);
+                }
+            }, new Action1<Throwable>() {
+                @Override
+                public void call(Throwable throwable) {
+                    mTitle.set("出现异常了： " + throwable.getMessage());
+                }
+            });
+```
+
+
+## 四.扩展用法
+##### 1.flatMap：处理循环（flatmap是map的扩展，可以防止循环和嵌套）
+
+```
+queryList().flatMap(new Func1<List<String>, Observable<String>>() {
+            @Override
+            public Observable<String> call(List<String> strings) {
+                return Observable.from(strings);
+            }
+        }).flatMap(new Func1<String, Observable<String>>() {
+            @Override
+            public Observable<String> call(String s) {
+                return getTitle(s);
+            }
+        }).subscribe(new Action1<String>() {
+            @Override
+            public void call(String s) {
+                Toast.makeText(RxActivity.this, s, Toast.LENGTH_SHORT).show();
+            }
+        });
+```
+##### 2.使用filter和take对被观察者集合进行过滤和数量限制
+
+```
+queryList().flatMap(new Func1<List<String>, Observable<String>>() {
+            @Override
+            public Observable<String> call(List<String> strings) {
+                return Observable.from(strings);
+            }
+        }).filter(new Func1<String, Boolean>() {//filter过滤运算结果为false的值
+            @Override
+            public Boolean call(String s) {
+                boolean res = s != null;
+                return res;
+            }
+        }).take(2).doOnNext(new Action1<String>() {//take限制输出结果的数量,doOnNext是在显示输出元素之前做的事情
+            @Override
+            public void call(String s) {
+                saveText(s);
+            }
+        }).subscribe(new Action1<String>() {
+            @Override
+            public void call(String s) {
+                Toast.makeText(RxActivity.this, s, Toast.LENGTH_SHORT).show();
+            }
+        });
+```
+##### 3.使用first()来获取第一个元素
+##### 4.使用Scheduler进行线程切换（指定观察者Subscriber和被观察者Observable的代码运行的线程），（Observable.create(),Observable.fromCallable等创建Observable的代码都属于被观察者的代码）
+###### ①subscribeOn：指定Observable被观察者的代码运行的线程；当它被重复指定时，仅第一次生效
+###### ②observeOn：指定Subscriber观察者的代码运行的线程，可以多次被指定，后面的代码将运行在前面最近一次指定的线程（flatMap,map和Action1都属于观察者的代码）
+
+```
+Observable.create(new Observable.OnSubscribe<List<String>>() {
+            @Override
+            public void call(Subscriber<? super List<String>> subscriber) {
+                List<String> list = new ArrayList<String>();
+                list.add("111");
+                list.add("222");
+                list.add("333");
+                subscriber.onNext(list);
+            }
+        }).subscribeOn(Schedulers.computation()).observeOn(Schedulers.newThread()).flatMap(new Func1<List<String>, Observable<String>>() {
+            @Override
+            public Observable<String> call(List<String> strings) {
+                return Observable.from(strings);
+            }
+        }).observeOn(AndroidSchedulers.mainThread()).map(new Func1<String, String>() {
+            @Override
+            public String call(String s) {
+                return "<" + s + ">";
+            }
+        }).observeOn(Schedulers.io()).map(new Func1<String, String>() {
+            @Override
+            public String call(String s) {
+                return s + "陈龙";
+            }
+        }).observeOn(AndroidSchedulers.mainThread()).subscribe(new Action1<String>() {
+            @Override
+            public void call(String s) {
+                Toast.makeText(RxActivity.this, s, Toast.LENGTH_SHORT).show();
+            }
+        }, new Action1<Throwable>() {
+            @Override
+            public void call(Throwable throwable) {
+                Toast.makeText(RxActivity.this, throwable.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }, new Action0() {
+            @Override
+            public void call() {
+                Toast.makeText(RxActivity.this, "Complete", Toast.LENGTH_SHORT).show();
+            }
+        });
+```
+## 五.高级用法
+##### 1.跳出回调地狱：使用flatMap
+###### ①创建retrofit网络访问，返回被观察者
+```
+public interface HttpServer {
+    /**得到工长列表*/
+    @POST("getWorkerListByDefault")
+    Observable<WorkerListBean> getWorkerList(@Query("pageNumber") int pageNumber);
+    /**获取工长的工地动态列表*/
+    @POST("gethouselistbyworkerid")
+    Observable<WorkerHouseBean> getSiteList(@Query("workerId") int workerId, @Query("currentNum") int currentNum);
+}
+```
+###### ②创建retrofit帮助类，对Retrofit进行初始化
+
+```
+public class RetrofitProvider {
+    private RetrofitProvider(){
+    }
+    public static RetrofitProvider getInstance() {
+        return SingleHolder.instance;
+    }
+
+    public Retrofit getRetrofit() {
+        return SingleHolder.sInstance;
+    }
+
+    private static class SingleHolder {
+        public static final RetrofitProvider instance = new RetrofitProvider();
+        private static final String BASE_URL = "http://112.124.61.7:8086/exiu/";//测试地址
+        public static final Retrofit sInstance =
+                new Retrofit.Builder().baseUrl(BASE_URL)
+                .addCallAdapterFactory(RxJavaCallAdapterFactory.create())
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+    }
+
+    public HttpServer getHttpServer() {
+        return getRetrofit().create(HttpServer.class);
+    }
+}
+```
+###### ③核心代码：通过flatMap将嵌套回调转换成“单向流动”的代码
+
+```
+mServer = RetrofitProvider.getInstance().getHttpServer();
+//整个RxJava的代码块就像数据单向流动一样，非常清晰
+mServer.getWorkerList(0)//被观察者-->获取工长列表
+        .subscribeOn(Schedulers.io())//将被观察者代码（网络请求）的执行过程放到io线程中
+        .observeOn(AndroidSchedulers.mainThread())//设置接下来的观察者代码执行在主线程
+        .flatMap(new Func1<WorkerListBean, Observable<WorkerListBean.WorkerEntity>>() {//将工长列表解析并展示，然后将工长列表拆分成多个单个工长，循环向下流动
+            @Override
+            public Observable<WorkerListBean.WorkerEntity> call(WorkerListBean workerListBean) {
+                List<WorkerListBean.WorkerEntity> list = resolve(workerListBean);
+                return Observable.from(list);
+            }
+        })
+        .observeOn(Schedulers.io())//设置接下来的观察者代码放到io线程中
+        .first()//截取第一个工长
+        .map(new Func1<WorkerListBean.WorkerEntity, Integer>() {//将工长对象转换成工长id
+            @Override
+            public Integer call(WorkerListBean.WorkerEntity workerEntity) {
+                return workerEntity.getWorkerId();
+            }
+        })
+        .observeOn(AndroidSchedulers.mainThread())//设置接下来的观察者代码放到主线程中
+        .flatMap(new Func1<Integer, Observable<WorkerHouseBean>>() {//用工长ID，被观察能获取网络数据：工长动态列表
+            @Override
+            public Observable<WorkerHouseBean> call(Integer integer) {
+                return mServer.getSiteList(integer, 0);
+            }
+        })
+        .flatMap(new Func1<WorkerHouseBean, Observable<WorkerHouseBean.WorkerHouseEntity>>() {
+            @Override
+            public Observable<WorkerHouseBean.WorkerHouseEntity> call(WorkerHouseBean workerHouseBean) {
+                List<WorkerHouseBean.WorkerHouseEntity> list = resolve(workerHouseBean);//解析工长动态列表并展示
+                return Observable.from(list);//将工长动态列表拆分成单个工长动态，循环向下流动
+            }
+        })
+        .first()//取到第一个工长动态
+        .subscribe(new Action1<WorkerHouseBean.WorkerHouseEntity>() {//开始订阅（即让整个流程流动起来）
+            @Override
+            public void call(WorkerHouseBean.WorkerHouseEntity workerHouseEntity) {
+                //执行最后一步，执行完流动结束
+                Toast.makeText(RxAndRetrofitActivity.this, "工地名称是" + workerHouseEntity.getHouseName(), Toast.LENGTH_SHORT).show();
+            }
+        }, new Action1<Throwable>() {
+            @Override
+            public void call(Throwable throwable) {
+                //流动过程出现异常
+                Toast.makeText(RxAndRetrofitActivity.this, "出现异常: " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }, new Action0() {
+            @Override
+            public void call() {
+                //流动过程没有异常的结束
+                Toast.makeText(RxAndRetrofitActivity.this, "Finished !", Toast.LENGTH_LONG).show();
+            }
+        });
+```
+
+
+
+
+
+
+
+
+
+
+
